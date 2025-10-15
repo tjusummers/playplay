@@ -163,21 +163,30 @@ def build_pdf(
     # Grid settings: default 8 rows x 2 columns
     start_y = height - top_margin - 0.4 * inch
     row_height = (height - (2 * margin) - top_margin) / (rows + 0.5)  # comfortable spacing
-    font_size = 16
-    c.setFont("Helvetica", font_size)
+    base_font_size = 16
+    c.setFont("Helvetica", base_font_size)
 
     # Ensure we have exactly rows*cols problems
     items = problems[: rows * cols]
     if len(items) < rows * cols:
         items += [("", 0)] * (rows * cols - len(items))
 
-    def draw_wrapped(text: str, x: float, y: float, max_width: float):
-        lines = simpleSplit(text, "Helvetica", font_size, max_width)
-        # Number of lines that fit in row height
-        line_height = font_size * 1.2
-        max_lines = max(1, int(row_height // line_height))
-        for i, line in enumerate(lines[:max_lines]):
-            c.drawString(x, y - i * line_height, line)
+    def draw_wrapped_fit(text: str, x: float, y: float, max_width: float):
+        """Draw text wrapped, reducing font size if needed to fit row height."""
+        min_font = 10
+        fs = base_font_size
+        while fs >= min_font:
+            lines = simpleSplit(text, "Helvetica", fs, max_width)
+            line_height = fs * 1.2
+            total_height = len(lines) * line_height
+            if total_height <= row_height or fs == min_font:
+                c.setFont("Helvetica", fs)
+                for i, line in enumerate(lines):
+                    c.drawString(x, y - i * line_height, line)
+                # restore base font for subsequent calls
+                c.setFont("Helvetica", base_font_size)
+                return
+            fs -= 1
 
     for r in range(rows):
         y = start_y - r * row_height
@@ -189,10 +198,11 @@ def build_pdf(
             if right_label:
                 # Draw question and a separate right-side label (e.g., "x = ______") for spacing
                 rx = x + col_width * right_label_ratio
-                draw_wrapped(prefix + text, x, y, max_width=(rx - x - 6))
+                draw_wrapped_fit(prefix + text, x, y, max_width=(rx - x - 6))
+                c.setFont("Helvetica", base_font_size)
                 c.drawString(rx, y, right_label)
             else:
-                draw_wrapped(prefix + text, x, y, max_width=col_width)
+                draw_wrapped_fit(prefix + text, x, y, max_width=col_width)
 
     if include_answer_key:
         # Go to second page: Answer Key
@@ -205,7 +215,7 @@ def build_pdf(
         c.drawString(margin, height - top_margin, title)
 
         # Answers in same grid
-        c.setFont("Helvetica", font_size)
+        c.setFont("Helvetica", base_font_size)
         for r in range(rows):
             y = start_y - r * row_height
             for col in range(cols):
@@ -222,8 +232,8 @@ def build_pdf(
                     lhs = problem_text.strip()
                 numbered = f"{idx + 1}) {lhs} = {ans}"
                 x = margin + col * (col_width + gutter)
-                # Wrap answer lines too in case of long symbolic answers
-                draw_wrapped(numbered, x, y, max_width=col_width)
+                # Wrap answer lines too in case of long symbolic answers; shrink if necessary
+                draw_wrapped_fit(numbered, x, y, max_width=col_width)
 
         c.showPage()
     c.save()
