@@ -206,27 +206,19 @@ def main():
 
     eqs = st.session_state["solve_equations"]
 
-    # Preview 10 x 2 (numbered) with extra spacing for the answer blank
+    # Preview 8 x 2 (numbered)
     st.subheader("Solve for x")
     left, right = st.columns(2)
     for i in range(8):
         with left:
-            c1, c2 = st.columns([4, 2])
-            with c1:
-                st.write(f"{i+1}) {eqs[i]}")
-            with c2:
-                st.write("x = ______")
+            st.write(f"{i+1}) {eqs[i]}")
         with right:
-            c1b, c2b = st.columns([4, 2])
-            with c1b:
-                st.write(f"{i+9}) {eqs[i + 8]}")
-            with c2b:
-                st.write("x = ______")
+            st.write(f"{i+9}) {eqs[i + 8]}")
 
     include_key = st.checkbox("Include Answer Key (requires sympy)", value=SYMPY_AVAILABLE)
     answers = solve_equations(eqs) if include_key and SYMPY_AVAILABLE else ["" for _ in eqs]
 
-    # Prepare items for PDF (10x2). Pass the equation only; PDF will place 'x = ____' with spacing.
+    # Prepare items for PDF (8x2). Pass equation only; no right-side blank.
     items: List[Tuple[str, str]] = [(eq, a.replace("x = ", "")) for eq, a in zip(eqs, answers)]
 
     if REPORTLAB_AVAILABLE:
@@ -234,8 +226,6 @@ def main():
             items,
             title="Isolating a Variable — Solve for x",
             include_answer_key=bool(include_key and SYMPY_AVAILABLE),
-            right_label="x = ______",
-            right_label_ratio=0.66,
             rows=8,
             cols=2,
         )

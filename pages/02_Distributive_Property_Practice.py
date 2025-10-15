@@ -185,14 +185,14 @@ def main():
     left, right = st.columns(2)
     for i in range(8):
         with left:
-            st.write(f"{i+1}) {exprs[i]} = ______")
+            st.write(f"{i+1}) {exprs[i]}")
         with right:
-            st.write(f"{i+9}) {exprs[i + 8]} = ______")
+            st.write(f"{i+9}) {exprs[i + 8]}")
 
     include_key = st.checkbox("Include Answer Key (requires sympy)", value=SYMPY_AVAILABLE)
     answers = try_expand(exprs) if include_key and SYMPY_AVAILABLE else ["" for _ in exprs]
 
-    # Build a PDF using the shared builder (8x2 grid). Put blanks in a right column to avoid overflow.
+    # Build a PDF using the shared builder (8x2 grid). Use full column width (no right-label).
     items: List[Tuple[str, str]] = [(e, a) for e, a in zip(exprs, answers)]
 
     if REPORTLAB_AVAILABLE:
@@ -200,7 +200,6 @@ def main():
             items,
             title="Distributive Property Practice — Simplify the expressions below",
             include_answer_key=bool(include_key and SYMPY_AVAILABLE),
-            right_label="= ______",
             rows=8,
             cols=2,
         )

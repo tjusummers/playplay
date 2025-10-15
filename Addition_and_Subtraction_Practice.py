@@ -133,7 +133,7 @@ def build_pdf(
     title: str = "Addition & Subtraction Practice",
     include_answer_key: bool = True,
     right_label: str | None = None,
-    right_label_ratio: float = 0.62,
+    right_label_ratio: float = 0.8,
     rows: int = 8,
     cols: int = 2,
 ) -> bytes:
@@ -153,7 +153,7 @@ def build_pdf(
     col_width = (usable_width - gutter) / 2
 
     # Header reservation determines table row height
-    reserved_header = 1.4 * inch  # space for title + name/date
+    reserved_header = 1.0 * inch  # space for title + name/date (tighter to give rows more space)
     available_h = height - 2 * margin - reserved_header
     row_height = available_h / rows
 
@@ -185,8 +185,17 @@ def build_pdf(
         alignment=TA_LEFT,
     )
 
+    def soft_wrap_text(text: str) -> str:
+        # Insert zero-width spaces near common break points to improve wrapping on all platforms
+        return (
+            text.replace("(", "(\u200b")
+                .replace(")", "\u200b)")
+                .replace("*", " \u200b* \u200b")
+                .replace("/", " \u200b/ \u200b")
+        )
+
     def make_cell(text: str, max_w: float) -> KeepInFrame:
-        p = Paragraph(text, cell_style)
+        p = Paragraph(soft_wrap_text(text), cell_style)
         return KeepInFrame(max_w, row_height, [p], mode='shrink')
 
     # Build table data for first page
@@ -233,7 +242,9 @@ def build_pdf(
     tbl.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING', (0, 0), (-1, -1), 2),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
         # Optionally draw light guides; commented out by default
         # ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
     ]))
@@ -265,7 +276,9 @@ def build_pdf(
         ans_tbl.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 2),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
         ]))
         story.append(ans_tbl)
 
