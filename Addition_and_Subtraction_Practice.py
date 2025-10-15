@@ -243,7 +243,7 @@ def build_pdf(
 
 def main():
     st.set_page_config(page_title="Addition and Subtraction Practice", page_icon="🧮", layout="centered")
-    st.title("Addition and Subtraction Practice (3-digit)")
+    st.title("Addition and Subtraction Practice (3-digit) V5")
     st.caption("Generates 8×2 mixed addition and subtraction with results between 0 and 999.")
 
     # Controls
