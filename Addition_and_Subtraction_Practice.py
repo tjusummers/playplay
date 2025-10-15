@@ -9,6 +9,7 @@ try:
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
     from reportlab.lib.units import inch
+    from reportlab.lib.utils import simpleSplit
     REPORTLAB_AVAILABLE = True
 except Exception:  # pragma: no cover
     REPORTLAB_AVAILABLE = False
@@ -170,6 +171,14 @@ def build_pdf(
     if len(items) < rows * cols:
         items += [("", 0)] * (rows * cols - len(items))
 
+    def draw_wrapped(text: str, x: float, y: float, max_width: float):
+        lines = simpleSplit(text, "Helvetica", font_size, max_width)
+        # Number of lines that fit in row height
+        line_height = font_size * 1.2
+        max_lines = max(1, int(row_height // line_height))
+        for i, line in enumerate(lines[:max_lines]):
+            c.drawString(x, y - i * line_height, line)
+
     for r in range(rows):
         y = start_y - r * row_height
         for col in range(cols):
@@ -179,11 +188,11 @@ def build_pdf(
             prefix = f"{idx + 1}) " if text else ""
             if right_label:
                 # Draw question and a separate right-side label (e.g., "x = ______") for spacing
-                c.drawString(x, y, prefix + text)
                 rx = x + col_width * right_label_ratio
+                draw_wrapped(prefix + text, x, y, max_width=(rx - x - 6))
                 c.drawString(rx, y, right_label)
             else:
-                c.drawString(x, y, prefix + text)
+                draw_wrapped(prefix + text, x, y, max_width=col_width)
 
     if include_answer_key:
         # Go to second page: Answer Key
@@ -213,7 +222,8 @@ def build_pdf(
                     lhs = problem_text.strip()
                 numbered = f"{idx + 1}) {lhs} = {ans}"
                 x = margin + col * (col_width + gutter)
-                c.drawString(x, y, numbered)
+                # Wrap answer lines too in case of long symbolic answers
+                draw_wrapped(numbered, x, y, max_width=col_width)
 
         c.showPage()
     c.save()
@@ -277,4 +287,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
