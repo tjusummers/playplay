@@ -10,6 +10,9 @@ try:
     from reportlab.pdfgen import canvas
     from reportlab.lib.units import inch
     from reportlab.lib.utils import simpleSplit
+    from reportlab.platypus import Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT
     REPORTLAB_AVAILABLE = True
 except Exception:  # pragma: no cover
     REPORTLAB_AVAILABLE = False
@@ -172,20 +175,37 @@ def build_pdf(
         items += [("", 0)] * (rows * cols - len(items))
 
     def draw_wrapped_fit(text: str, x: float, y: float, max_width: float):
-        """Draw text wrapped, reducing font size if needed to fit row height."""
+        """Draw text wrapped, reducing font size if needed to fit row height.
+        Uses Paragraph.wrapOn for consistent wrapping across environments.
+        """
         min_font = 10
         fs = base_font_size
         while fs >= min_font:
-            lines = simpleSplit(text, "Helvetica", fs, max_width)
-            line_height = fs * 1.2
-            total_height = len(lines) * line_height
-            if total_height <= row_height or fs == min_font:
-                c.setFont("Helvetica", fs)
-                for i, line in enumerate(lines):
-                    c.drawString(x, y - i * line_height, line)
-                # restore base font for subsequent calls
-                c.setFont("Helvetica", base_font_size)
-                return
+            try:
+                style = ParagraphStyle(
+                    name="worksheet",
+                    fontName="Helvetica",
+                    fontSize=fs,
+                    leading=fs * 1.2,
+                    alignment=TA_LEFT,
+                )
+                p = Paragraph(text, style)
+                w, h = p.wrapOn(c, max_width, row_height)
+                if h <= row_height or fs == min_font:
+                    # Draw with top alignment: move baseline down by total height
+                    p.drawOn(c, x, y - h + style.leading * 0.2)
+                    return
+            except Exception:
+                # Fallback to simpleSplit if Paragraph fails for some reason
+                lines = simpleSplit(text, "Helvetica", fs, max_width)
+                line_height = fs * 1.2
+                total_height = len(lines) * line_height
+                if total_height <= row_height or fs == min_font:
+                    c.setFont("Helvetica", fs)
+                    for i, line in enumerate(lines):
+                        c.drawString(x, y - i * line_height, line)
+                    c.setFont("Helvetica", base_font_size)
+                    return
             fs -= 1
 
     for r in range(rows):
@@ -243,7 +263,7 @@ def build_pdf(
 
 def main():
     st.set_page_config(page_title="Addition and Subtraction Practice", page_icon="🧮", layout="centered")
-    st.title("Addition and Subtraction Practice (3-digit) V5")
+    st.title("Addition and Subtraction Practice (3-digit) V6")
     st.caption("Generates 8×2 mixed addition and subtraction with results between 0 and 999.")
 
     # Controls
