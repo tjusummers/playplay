@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Arithmetic Generator</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        h1 { color: #333; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>🧮 Your Arithmetic Problems</h1>
+    <ul>
+        {% for problem in problems %}
+            <li>{{ loop.index }}. {{ problem }}</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
