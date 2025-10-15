@@ -123,7 +123,8 @@ def generate_problems(n: int = 16) -> List[Tuple[str, int]]:
         else:
             a, b = _gen_sub_by_difficulty(tier)
             answer = a - b
-        problems.append((f"{a} {op} {b} = ______", answer))
+        # Store problem string WITHOUT blanks; rendering will add blanks
+        problems.append((f"{a} {op} {b}", answer))
     return problems
 
 
@@ -303,13 +304,13 @@ def main():
     left, right = st.columns(2)
     for i in range(8):
         with left:
-            st.write(f"{i+1}) {problems[i][0]}")
+            st.write(f"{i+1}) {problems[i][0]} = ______")
         with right:
-            st.write(f"{i+9}) {problems[i + 8][0]}")
+            st.write(f"{i+9}) {problems[i + 8][0]} = ______")
 
     # Build PDF and provide download
     try:
-        pdf_bytes = build_pdf(problems)
+        pdf_bytes = build_pdf(problems, right_label="= ______")
         st.download_button(
             label="Download Printable PDF",
             data=pdf_bytes,

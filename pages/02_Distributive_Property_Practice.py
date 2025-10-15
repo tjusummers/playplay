@@ -192,14 +192,15 @@ def main():
     include_key = st.checkbox("Include Answer Key (requires sympy)", value=SYMPY_AVAILABLE)
     answers = try_expand(exprs) if include_key and SYMPY_AVAILABLE else ["" for _ in exprs]
 
-    # Build a PDF using the shared builder (10x2 grid)
-    items: List[Tuple[str, str]] = [(f"{e} = ______", a) for e, a in zip(exprs, answers)]
+    # Build a PDF using the shared builder (8x2 grid). Put blanks in a right column to avoid overflow.
+    items: List[Tuple[str, str]] = [(e, a) for e, a in zip(exprs, answers)]
 
     if REPORTLAB_AVAILABLE:
         pdf_bytes = build_pdf(
             items,
             title="Distributive Property Practice — Simplify the expressions below",
             include_answer_key=bool(include_key and SYMPY_AVAILABLE),
+            right_label="= ______",
             rows=8,
             cols=2,
         )
