@@ -10,7 +10,7 @@ try:
     from reportlab.pdfgen import canvas
     from reportlab.lib.units import inch
     from reportlab.lib.utils import simpleSplit
-    from reportlab.platypus import Paragraph
+    from reportlab.platypus import Paragraph, KeepInFrame, Table, TableStyle, SimpleDocTemplate, Spacer
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_LEFT
     REPORTLAB_AVAILABLE = True
@@ -136,127 +136,140 @@ def build_pdf(
     rows: int = 8,
     cols: int = 2,
 ) -> bytes:
-    """Render problems to a printable PDF (rows x cols). Returns PDF bytes.
-    Requires reportlab. If not available, raises RuntimeError with install hint.
+    """Render problems to a printable PDF (rows x cols) using Platypus Table with wrapping.
+    Uses KeepInFrame(shrink) to ensure content fits into fixed row heights across environments.
     """
     if not REPORTLAB_AVAILABLE:
-        raise RuntimeError(
-            "ReportLab not installed. Install with: pip install reportlab"
-        )
+        raise RuntimeError("ReportLab not installed. Install with: pip install reportlab")
 
     buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
 
-    # Page layout
+    # Page geometry
+    width, height = letter
     margin = 0.6 * inch
-    top_margin = 0.9 * inch
     gutter = 0.5 * inch
     usable_width = width - 2 * margin
     col_width = (usable_width - gutter) / 2
 
-    # Title
-    c.setFont("Helvetica-Bold", 18)
-    c.drawCentredString(width / 2, height - top_margin + 0.35 * inch, title)
+    # Header reservation determines table row height
+    reserved_header = 1.4 * inch  # space for title + name/date
+    available_h = height - 2 * margin - reserved_header
+    row_height = available_h / rows
 
-    # Sub-title / name line
-    c.setFont("Helvetica", 11)
-    c.drawString(margin, height - top_margin, "Name: __________________________  Date: _____________")
-
-    # Grid settings: default 8 rows x 2 columns
-    start_y = height - top_margin - 0.4 * inch
-    row_height = (height - (2 * margin) - top_margin) / (rows + 0.5)  # comfortable spacing
-    base_font_size = 16
-    c.setFont("Helvetica", base_font_size)
-
-    # Ensure we have exactly rows*cols problems
+    # Prepare data items to exactly rows*cols
     items = problems[: rows * cols]
     if len(items) < rows * cols:
         items += [("", 0)] * (rows * cols - len(items))
 
-    def draw_wrapped_fit(text: str, x: float, y: float, max_width: float):
-        """Draw text wrapped, reducing font size if needed to fit row height.
-        Uses Paragraph.wrapOn for consistent wrapping across environments.
-        """
-        min_font = 10
-        fs = base_font_size
-        while fs >= min_font:
-            try:
-                style = ParagraphStyle(
-                    name="worksheet",
-                    fontName="Helvetica",
-                    fontSize=fs,
-                    leading=fs * 1.2,
-                    alignment=TA_LEFT,
-                )
-                p = Paragraph(text, style)
-                w, h = p.wrapOn(c, max_width, row_height)
-                if h <= row_height or fs == min_font:
-                    # Draw with top alignment: move baseline down by total height
-                    p.drawOn(c, x, y - h + style.leading * 0.2)
-                    return
-            except Exception:
-                # Fallback to simpleSplit if Paragraph fails for some reason
-                lines = simpleSplit(text, "Helvetica", fs, max_width)
-                line_height = fs * 1.2
-                total_height = len(lines) * line_height
-                if total_height <= row_height or fs == min_font:
-                    c.setFont("Helvetica", fs)
-                    for i, line in enumerate(lines):
-                        c.drawString(x, y - i * line_height, line)
-                    c.setFont("Helvetica", base_font_size)
-                    return
-            fs -= 1
+    # Styles
+    base_font = 16
+    name_style = ParagraphStyle(
+        name="name",
+        fontName="Helvetica",
+        fontSize=11,
+        leading=13,
+    )
+    title_style = ParagraphStyle(
+        name="title",
+        fontName="Helvetica-Bold",
+        fontSize=18,
+        leading=22,
+        alignment=TA_LEFT,
+    )
+    cell_style = ParagraphStyle(
+        name="cell",
+        fontName="Helvetica",
+        fontSize=base_font,
+        leading=base_font * 1.2,
+        alignment=TA_LEFT,
+    )
 
-    for r in range(rows):
-        y = start_y - r * row_height
-        for col in range(cols):
-            idx = r + col * rows
-            text = items[idx][0]
-            x = margin + col * (col_width + gutter)
-            prefix = f"{idx + 1}) " if text else ""
-            if right_label:
-                # Draw question and a separate right-side label (e.g., "x = ______") for spacing
-                rx = x + col_width * right_label_ratio
-                draw_wrapped_fit(prefix + text, x, y, max_width=(rx - x - 6))
-                c.setFont("Helvetica", base_font_size)
-                c.drawString(rx, y, right_label)
-            else:
-                draw_wrapped_fit(prefix + text, x, y, max_width=col_width)
+    def make_cell(text: str, max_w: float) -> KeepInFrame:
+        p = Paragraph(text, cell_style)
+        return KeepInFrame(max_w, row_height, [p], mode='shrink')
 
-    if include_answer_key:
-        # Go to second page: Answer Key
-        c.showPage()
-
-        # Answer key title
-        c.setFont("Helvetica-Bold", 18)
-        c.drawCentredString(width / 2, height - top_margin + 0.35 * inch, "Answer Key")
-        c.setFont("Helvetica", 11)
-        c.drawString(margin, height - top_margin, title)
-
-        # Answers in same grid
-        c.setFont("Helvetica", base_font_size)
+    # Build table data for first page
+    data = []
+    if right_label:
+        q_w = max(36, col_width * right_label_ratio - 6)
+        r_w = max(36, col_width - q_w)
+        col_widths = [q_w, r_w, q_w, r_w]
         for r in range(rows):
-            y = start_y - r * row_height
-            for col in range(cols):
-                idx = r + col * rows
-                if idx >= len(items):
-                    continue
-                problem_text, ans = items[idx]
-                if not problem_text:
-                    continue
-                # Extract the left-hand expression before blanks if present
-                if "______" in problem_text or " = " in problem_text:
-                    lhs = problem_text.split("=")[0].strip()
-                else:
-                    lhs = problem_text.strip()
-                numbered = f"{idx + 1}) {lhs} = {ans}"
-                x = margin + col * (col_width + gutter)
-                # Wrap answer lines too in case of long symbolic answers; shrink if necessary
-                draw_wrapped_fit(numbered, x, y, max_width=col_width)
+            left_idx = r
+            right_idx = r + rows
+            left_text = items[left_idx][0]
+            right_text = items[right_idx][0]
+            left_para = make_cell(f"{left_idx + 1}) {left_text}", q_w)
+            right_para = make_cell(f"{right_idx + 1}) {right_text}", q_w)
+            data.append([left_para, Paragraph(right_label, cell_style), right_para, Paragraph(right_label, cell_style)])
+    else:
+        col_widths = [col_width, col_width]
+        for r in range(rows):
+            left_idx = r
+            right_idx = r + rows
+            left_text = items[left_idx][0]
+            right_text = items[right_idx][0]
+            left_para = make_cell(f"{left_idx + 1}) {left_text}", col_width)
+            right_para = make_cell(f"{right_idx + 1}) {right_text}", col_width)
+            data.append([left_para, right_para])
 
-        c.showPage()
-    c.save()
+    # Construct story
+    story: list = []
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        leftMargin=margin,
+        rightMargin=margin,
+        topMargin=margin,
+        bottomMargin=margin,
+    )
+
+    story.append(Paragraph(title, title_style))
+    story.append(Paragraph("Name: __________________________  Date: _____________", name_style))
+    story.append(Spacer(0, 0.2 * inch))
+
+    tbl = Table(data, colWidths=col_widths, rowHeights=[row_height] * rows, repeatRows=0)
+    tbl.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        # Optionally draw light guides; commented out by default
+        # ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+    ]))
+    story.append(tbl)
+
+    # Answer Key page
+    if include_answer_key:
+        from reportlab.platypus import PageBreak
+        story.append(PageBreak())
+        story.append(Paragraph("Answer Key", title_style))
+        story.append(Paragraph(title, name_style))
+        story.append(Spacer(0, 0.2 * inch))
+
+        ans_data = []
+        for r in range(rows):
+            left_idx = r
+            right_idx = r + rows
+            # Extract lhs without blanks for answers
+            def lhs_text(t: str) -> str:
+                return t.split('=')[0].strip() if '=' in t else t.strip()
+
+            left_problem, left_ans = items[left_idx]
+            right_problem, right_ans = items[right_idx]
+            left_para = make_cell(f"{left_idx + 1}) {lhs_text(left_problem)} = {left_ans}", col_width)
+            right_para = make_cell(f"{right_idx + 1}) {lhs_text(right_problem)} = {right_ans}", col_width)
+            ans_data.append([left_para, right_para])
+
+        ans_tbl = Table(ans_data, colWidths=[col_width, col_width], rowHeights=[row_height] * rows)
+        ans_tbl.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        story.append(ans_tbl)
+
+    # Build document
+    doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
 
