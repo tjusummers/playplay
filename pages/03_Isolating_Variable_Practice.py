@@ -189,7 +189,7 @@ def solve_equations(eqs: List[str]) -> List[str]:
 
 
 def main():
-    st.title("Isolating a Variable — Solve the equations below")
+    st.title("Isolating a Variable - Solve the equations below")
     st.caption("Generates 8×2 linear equations in x with mixed difficulty and structure.")
 
     col1, col2 = st.columns([1, 1])
@@ -222,13 +222,26 @@ def main():
     items: List[Tuple[str, str]] = [(eq, a.replace("x = ", "")) for eq, a in zip(eqs, answers)]
 
     if REPORTLAB_AVAILABLE:
-        pdf_bytes = build_pdf(
+        try:
+            pdf_bytes = build_pdf(
             items,
-            title="Isolating a Variable — Solve for x",
+            title="Isolating a Variable - Solve for x",
             include_answer_key=bool(include_key and SYMPY_AVAILABLE),
             rows=8,
             cols=2,
-        )
+            answer_key_use_lhs=False, # force no LHS in key
+            answer_key_prefix="", # and no prefix; shows only the value
+            )
+        except TypeError:
+            # Fallback for older builder signature (won't crash; if you still see “lhs = value”,
+            # restart Streamlit so the latest builder gets loaded)
+            pdf_bytes = build_pdf(
+            items,
+            title="Isolating a Variable - Solve for x",
+            include_answer_key=bool(include_key and SYMPY_AVAILABLE),
+            rows=8,
+            cols=2,
+            )
         st.download_button(
             label="Download Printable PDF",
             data=pdf_bytes,
