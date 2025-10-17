@@ -1,4 +1,5 @@
 import io
+import os
 import random
 from typing import List, Tuple
 
@@ -13,9 +14,31 @@ try:
     from reportlab.platypus import Paragraph, KeepInFrame, Table, TableStyle, SimpleDocTemplate, Spacer
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_LEFT
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
     REPORTLAB_AVAILABLE = True
 except Exception:  # pragma: no cover
     REPORTLAB_AVAILABLE = False
+
+# Try to register a Unicode TTF font (optional). If not present, fall back to Helvetica.
+UNICODE_FONT = None
+UNICODE_FONT_BOLD = None
+if REPORTLAB_AVAILABLE:
+    try:
+        font_root = os.path.join(os.path.dirname(__file__), 'assets', 'fonts')
+        regular_path = os.path.join(font_root, 'DejaVuSans.ttf')
+        bold_path = os.path.join(font_root, 'DejaVuSans-Bold.ttf')
+        if os.path.exists(regular_path):
+            pdfmetrics.registerFont(TTFont('DejaVuSans', regular_path))
+            UNICODE_FONT = 'DejaVuSans'
+        if os.path.exists(bold_path):
+            pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', bold_path))
+            UNICODE_FONT_BOLD = 'DejaVuSans-Bold'
+        elif UNICODE_FONT:
+            UNICODE_FONT_BOLD = UNICODE_FONT
+    except Exception:
+        UNICODE_FONT = None
+        UNICODE_FONT_BOLD = None
 
 
 def generate_3digit_operands_addition() -> Tuple[int, int]:
@@ -169,22 +192,26 @@ def build_pdf(
 
     # Styles
     base_font = 16
+    # Choose fonts: prefer embedded Unicode font if available
+    base_font_name = UNICODE_FONT or "Helvetica"
+    bold_font_name = UNICODE_FONT_BOLD or "Helvetica-Bold"
+
     name_style = ParagraphStyle(
         name="name",
-        fontName="Helvetica",
+        fontName=base_font_name,
         fontSize=11,
         leading=13,
     )
     title_style = ParagraphStyle(
         name="title",
-        fontName="Helvetica-Bold",
+        fontName=bold_font_name,
         fontSize=18,
         leading=22,
         alignment=TA_LEFT,
     )
     cell_style = ParagraphStyle(
         name="cell",
-        fontName="Helvetica",
+        fontName=base_font_name,
         fontSize=base_font,
         leading=base_font * 1.2,
         alignment=TA_LEFT,
@@ -202,10 +229,12 @@ def build_pdf(
         }
         for k, v in replacements.items():
             text = text.replace(k, v)
-        try:
-            text = text.encode('ascii', errors='ignore').decode('ascii')
-        except Exception:
-            pass
+        # If no embedded Unicode font is available, strip non-ASCII to avoid boxes
+        if not UNICODE_FONT:
+            try:
+                text = text.encode('ascii', errors='ignore').decode('ascii')
+            except Exception:
+                pass
         return text
 
     def make_cell(text: str, max_w: float) -> KeepInFrame:
