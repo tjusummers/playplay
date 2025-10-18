@@ -189,6 +189,20 @@ def solve_equations(eqs: List[str]) -> List[str]:
 
 
 def main():
+    # Hide sidebar on this page
+    try:
+        st.set_page_config(initial_sidebar_state="collapsed")
+    except Exception:
+        pass
+    st.markdown(
+        """
+        <style>
+          [data-testid=\"stSidebar\"] { display: none !important; }
+          [data-testid=\"collapsedControl\"] { display: none !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.title("Isolating a Variable - Solve the equations below")
     st.caption("Generates 8×2 linear equations in x with mixed difficulty and structure.")
 
@@ -197,6 +211,8 @@ def main():
         seed_text = st.text_input("Seed (optional)", value="")
     with col2:
         regen = st.button("Generate Set", type="primary")
+
+    
 
     if seed_text.strip():
         random.seed(seed_text.strip())
@@ -250,6 +266,14 @@ def main():
         )
     else:
         st.info("PDF engine not available. Install reportlab to enable PDF download.")
+
+    # Back to Math at bottom
+    st.divider()
+    if st.button("Back to Math", type="primary", key="back_to_math_isovar"):
+        try:
+            st.switch_page("pages/01_Math.py")  # type: ignore[attr-defined]
+        except Exception:
+            st.warning("Open the Math page from the sidebar.")
 
 
 if __name__ == "__main__":

@@ -164,6 +164,20 @@ def try_expand(exprs: List[str]) -> List[str]:
 
 
 def main():
+    # Hide sidebar on this page
+    try:
+        st.set_page_config(initial_sidebar_state="collapsed")
+    except Exception:
+        pass
+    st.markdown(
+        """
+        <style>
+          [data-testid=\"stSidebar\"] { display: none !important; }
+          [data-testid=\"collapsedControl\"] { display: none !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.title("Distributive Property Practice (Algebra)")
     st.caption("Generates 8×2 expressions to practice correct order of operations and distribution.")
 
@@ -211,6 +225,14 @@ def main():
         )
     else:
         st.info("PDF engine not available. Install reportlab on the system to enable PDF download.")
+
+    # Back to Math at bottom
+    st.divider()
+    if st.button("Back to Math", type="primary", key="back_to_math_dist"):
+        try:
+            st.switch_page("pages/01_Math.py")  # type: ignore[attr-defined]
+        except Exception:
+            st.warning("Open the Math page from the sidebar.")
 
 
 if __name__ == "__main__":
