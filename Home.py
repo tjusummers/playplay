@@ -25,10 +25,16 @@ st.markdown(
 # Prefer native page links if available; otherwise fall back to a button
 try:
     # Streamlit 1.22+ supports programmatic navigation; 1.27+ adds st.page_link
-    st.page_link("pages/01_Math.py", label="Math", icon="🧮")  # type: ignore[attr-defined]
+    st.page_link("pages/01_Math.py", label="Math")  # type: ignore[attr-defined]
+    st.page_link("pages/05_English_Vocabulary.py", label="English Vocabulary")  # type: ignore[attr-defined]
 except Exception:
     if st.button("Math", type="primary"):
         try:
             st.switch_page("pages/01_Math.py")  # type: ignore[attr-defined]
         except Exception:
             st.warning("Please use the sidebar to navigate to Math pages.")
+    if st.button("English Vocabulary", type="primary"):
+        try:
+            st.switch_page("pages/05_English_Vocabulary.py")  # type: ignore[attr-defined]
+        except Exception:
+            st.warning("Please use the sidebar to navigate to English pages.")
