@@ -1,5 +1,6 @@
 import os
 import io
+import random
 from typing import Dict, List, Set, Tuple
 
 import streamlit as st
@@ -7,7 +8,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Kindergarten vocabulary",
-    page_icon="📚",
+    page_icon="??",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
@@ -374,31 +375,157 @@ try:
         _family_lines = data.get("Family Words", [])
     _any_content = bool(_sight or _phon or _family_lines)
     if _any_content:
+        # Precompute combined PDF or TXT fallback
+        combined_pdf_bytes = None
+        combined_txt_data = None
         try:
-            combined_pdf = build_all_pdf(_sight, _phon, _family_lines, grouped=_grouped)
-            st.download_button(
-                label="Download All (PDF)",
-                data=combined_pdf,
-                file_name="kindergarten_all_words.pdf",
-                mime="application/pdf",
-                key="dl_all_pdf_top",
-            )
+            combined_pdf_bytes = build_all_pdf(_sight, _phon, _family_lines, grouped=_grouped)
         except RuntimeError as e:
             st.info(str(e))
-            combined_txt = []
+            parts = []
             if _sight:
-                combined_txt.append("Sight Words:\n" + "\n".join(_sight))
+                parts.append("Sight Words:\n" + "\n".join(_sight))
             if _phon:
-                combined_txt.append("Phonetic Words:\n" + "\n".join(_phon))
+                parts.append("Phonetic Words:\n" + "\n".join(_phon))
             if _family_lines:
-                combined_txt.append("Family Words:\n" + "\n".join(_family_lines))
-            st.download_button(
-                label="Download All as .txt (fallback)",
-                data="\n\n".join(combined_txt),
-                file_name="kindergarten_all_words.txt",
-                mime="text/plain",
-                key="dl_all_txt_top",
+                parts.append("Family Words:\n" + "\n".join(_family_lines))
+            combined_txt_data = "\n\n".join(parts)
+
+        # Create a Quiz (30 random words in a 10x3 grid)
+        def build_quiz_pdf(words: List[str], rows: int = 10, cols: int = 3) -> bytes:
+            if not REPORTLAB_AVAILABLE:
+                raise RuntimeError("PDF engine not available. Install reportlab to enable PDF download.")
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
+            from reportlab.lib.styles import ParagraphStyle
+            from reportlab.lib.enums import TA_LEFT
+            buf = io.BytesIO()
+            doc = SimpleDocTemplate(
+                buf, pagesize=letter, leftMargin=54, rightMargin=54, topMargin=54, bottomMargin=54
             )
+            title_style = ParagraphStyle(
+                name="Title", fontName="Helvetica-Bold", fontSize=16, alignment=TA_LEFT, spaceAfter=12
+            )
+            label_style = ParagraphStyle(name="Label", fontName="Helvetica", fontSize=12, leading=14)
+            cell_style = ParagraphStyle(name="Cell", fontName="Helvetica", fontSize=14, leading=16)
+            story: List = []  # type: ignore[var-annotated]
+
+            # Header with Name/Date
+            story.append(Paragraph("Name: ________________________________    Date: ____________", label_style))
+            story.append(Paragraph("Kindergarten Vocabulary Quiz", title_style))
+
+            # Build grid
+            grid: List[List[Paragraph]] = []
+            idx = 0
+            for r in range(rows):
+                row: List[Paragraph] = []
+                for c in range(cols):
+                    txt = words[idx] if idx < len(words) else ""
+                    row.append(Paragraph(txt, cell_style))
+                    idx += 1
+                grid.append(row)
+
+            # Table with underline under each cell content, center text, and grid
+            from reportlab.lib.pagesizes import letter as _letter
+            available_width = _letter[0] - 54 - 54
+            col_w = available_width / cols
+            tbl = Table(grid, hAlign="LEFT", colWidths=[col_w]*cols)
+            tbl.setStyle(
+                TableStyle(
+                    [
+                        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("LINEBELOW", (0, 0), (-1, -1), 0.5, "#000000"),
+                        ("BOX", (0, 0), (-1, -1), 0.75, "#000000"),
+                        ("GRID", (0, 0), (-1, -1), 0.25, "#999999"),
+                    ]
+                )
+            )
+            story.append(tbl)
+            doc.build(story)
+            buf.seek(0)
+            return buf.getvalue()
+
+        # Prepare flat family words for quiz
+        if _grouped:
+            _family_words_flat = sorted({w for fam in family_groups.values() for w in fam})
+        else:
+            _family_words_flat = data.get("Family Words", [])
+
+        # Unique combined list preserving order
+        _combined_unique: List[str] = []
+        for w in _sight + _phon + _family_words_flat:
+            if w not in _combined_unique:
+                _combined_unique.append(w)
+
+        # Random 30 words, pad with blanks to 30 if fewer available
+        pool = list(_combined_unique)
+        quiz_pdf_bytes = None
+        quiz_txt_data = None
+        if pool:
+            k = min(30, len(pool))
+            picked = random.sample(pool, k=k)
+            if k < 30:
+                picked += [""] * (30 - k)
+            try:
+                quiz_pdf_bytes = build_quiz_pdf(picked, rows=10, cols=3)
+            except RuntimeError as e:
+                st.info(str(e))
+                quiz_txt_data = "\n".join(picked)
+
+        # Style buttons globally and render top actions side by side
+        st.markdown(
+            """
+            <style>
+              [data-testid="stDownloadButton"] > button, .stButton > button {
+                background-color: #1f6feb !important;
+                color: #ffffff !important;
+                border: 1px solid #1f6feb !important;
+                border-radius: 6px !important;
+                padding: 0.4rem 0.9rem !important;
+              }
+              [data-testid="stDownloadButton"] > button:hover, .stButton > button:hover { filter: brightness(0.95); }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if combined_pdf_bytes is not None:
+                st.download_button(
+                    label="⬇️ Download All (PDF)",
+                    data=combined_pdf_bytes,
+                    file_name="kindergarten_all_words.pdf",
+                    mime="application/pdf",
+                    key="dl_all_pdf_top",
+                )
+            elif combined_txt_data is not None:
+                st.download_button(
+                    label="⬇️ Download All (txt)",
+                    data=combined_txt_data,
+                    file_name="kindergarten_all_words.txt",
+                    mime="text/plain",
+                    key="dl_all_txt_top",
+                )
+        with c2:
+            if quiz_pdf_bytes is not None:
+                st.download_button(
+                    label="📝 Create a Quiz",
+                    data=quiz_pdf_bytes,
+                    file_name="kindergarten_vocab_quiz.pdf",
+                    mime="application/pdf",
+                    key="dl_quiz_pdf_top",
+                )
+            elif quiz_txt_data is not None:
+                st.download_button(
+                    label="📝 Create a Quiz (txt)",
+                    data=quiz_txt_data,
+                    file_name="kindergarten_vocab_quiz.txt",
+                    mime="text/plain",
+                    key="dl_quiz_txt_top",
+                )
 except Exception:
     pass
 # Sight Words section
@@ -494,4 +621,7 @@ if st.button("Back to English Vocabulary", type="primary"):
         st.switch_page("pages/05_English_Vocabulary.py")  # type: ignore[attr-defined]
     except Exception:
         st.warning("Use the Home → English Vocabulary link.")
+
+
+
 
